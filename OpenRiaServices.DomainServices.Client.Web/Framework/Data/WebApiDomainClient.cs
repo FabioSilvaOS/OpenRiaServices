@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
@@ -71,8 +72,8 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
                         writer.WriteStartElement(param.Key);  // <ParameterName>
                         if (param.Value != null)
                         {
-                            var serializer = domainClient.GetSerializer(param.Value.GetType());
-                            serializer.WriteObjectContent(writer, param.Value);
+                                var serializer = domainClient.GetSerializer(param.Value.GetType());
+                                serializer.WriteObjectContent(writer, param.Value);
                         }
                         else
                         {
@@ -85,7 +86,6 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
 
                 writer.WriteEndDocument(); // </OperationName> and </MessageRoot> if present
                 writer.Flush();
-
                 return Task.CompletedTask;
             }
 
@@ -554,8 +554,13 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
                 {
                     // TODO: ENsure that DateTimeOffset is part of known types 
                     // Unlike other primitive types, the DateTimeOffset structure is not a known type by default, so it must be manually added to the list of known types.
-                    serializer = new DataContractSerializer(type, EntityTypes);
-                    _serializerCache.Add(type, serializer); 
+
+                    serializer = new DataContractSerializer(type, new DataContractSerializerSettings
+                    {
+                        KnownTypes=EntityTypes,
+                        SerializeReadOnlyTypes=true
+                    });
+                    _serializerCache.Add(type, serializer);
                 }
             }
 
