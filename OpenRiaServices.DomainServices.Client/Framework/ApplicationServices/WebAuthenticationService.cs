@@ -181,11 +181,12 @@ namespace OpenRiaServices.DomainServices.Client.ApplicationServices
 
             try
             {
-                query = (EntityQuery)this.DomainContext.GetType().GetMethod(
-                    WebAuthenticationService.LoginQueryName,
-                    new Type[] { typeof(string), typeof(string), typeof(bool), typeof(string) }).Invoke(
-                    this.DomainContext,
-                    new object[] { parameters.UserName, parameters.Password, parameters.IsPersistent, parameters.CustomData });
+                query = (EntityQuery)this.DomainContext
+                    .GetType()
+                    .GetMethod(WebAuthenticationService.LoginQueryName,
+                               new Type[] { typeof(string), typeof(string), typeof(bool), typeof(string) })
+                    .Invoke(this.DomainContext,
+                            new object[] { parameters.UserName, parameters.Password, parameters.IsPersistent, parameters.CustomData });
             }
             catch (TargetInvocationException tie)
             {
@@ -268,11 +269,10 @@ namespace OpenRiaServices.DomainServices.Client.ApplicationServices
 
             try
             {
-                query = (EntityQuery)this.DomainContext.GetType().GetMethod(
-                    WebAuthenticationService.LogoutQueryName,
-                    TypeUtility.EmptyTypes).Invoke(
-                    this.DomainContext,
-                    TypeUtility.EmptyTypes);
+                query = (EntityQuery)this.DomainContext
+                    .GetType()
+                    .GetMethod(WebAuthenticationService.LogoutQueryName, TypeUtility.EmptyTypes)
+                    .Invoke(this.DomainContext, TypeUtility.EmptyTypes);
             }
             catch (TargetInvocationException tie)
             {
@@ -359,11 +359,10 @@ namespace OpenRiaServices.DomainServices.Client.ApplicationServices
 
             try
             {
-                query = (EntityQuery)this.DomainContext.GetType().GetMethod(
-                    WebAuthenticationService.LoadUserQueryName,
-                    TypeUtility.EmptyTypes).Invoke(
-                    this.DomainContext,
-                    TypeUtility.EmptyTypes);
+                query = (EntityQuery)this.DomainContext
+                    .GetType()
+                    .GetMethod(WebAuthenticationService.LoadUserQueryName, TypeUtility.EmptyTypes)
+                    .Invoke(this.DomainContext, TypeUtility.EmptyTypes);
             }
             catch (TargetInvocationException tie)
             {

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
@@ -13,6 +12,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using System.Windows;
+using CSHTML5.Internal;
 using Newtonsoft.Json;
 
 namespace OpenRiaServices.DomainServices.Client.PortableWeb
@@ -72,8 +73,8 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
                         writer.WriteStartElement(param.Key);  // <ParameterName>
                         if (param.Value != null)
                         {
-                                var serializer = domainClient.GetSerializer(param.Value.GetType());
-                                serializer.WriteObjectContent(writer, param.Value);
+                            var serializer = domainClient.GetSerializer(param.Value.GetType());
+                            serializer.WriteObjectContent(writer, param.Value);
                         }
                         else
                         {
@@ -137,15 +138,14 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
         /// </returns>
         protected override async Task<InvokeCompletedResult> InvokeCoreAsync(InvokeArgs invokeArgs, CancellationToken cancellationToken)
         {
-            var response = await ExecuteRequestAsync(invokeArgs.OperationName, invokeArgs.HasSideEffects, invokeArgs.Parameters, queryOptions: null, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
+            var response = await ExecuteBinaryRequestAsync(invokeArgs.OperationName, invokeArgs.HasSideEffects, invokeArgs.Parameters, queryOptions: null);
 
             IEnumerable<ValidationResult> validationErrors = null;
             object returnValue = null;
 
             try
             {
-                returnValue = ReadResponse(response, invokeArgs.OperationName, invokeArgs.ReturnType);
+                returnValue = ReadBinaryResponse(response, invokeArgs.OperationName, invokeArgs.ReturnType);
             }
             catch (FaultException<DomainServiceFault> fe)
             {
@@ -176,16 +176,16 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
         {
             const string operationName = "SubmitChanges";
             var entries = changeSet.GetChangeSetEntries().ToList();
-            var parameters = new Dictionary<string, object>() {
+            var parameters = new Dictionary<string, object>()
+            {
                 {"changeSet", entries}
             };
 
-            var response = await ExecuteRequestAsync(operationName, hasSideEffects: true, parameters: parameters, queryOptions: null, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
+            var response = await ExecuteBinaryRequestAsync(operationName, hasSideEffects: true, parameters: parameters, queryOptions: null);
 
             try
             {
-                var returnValue = (IEnumerable<ChangeSetEntry>)ReadResponse(response, operationName, typeof(IEnumerable<ChangeSetEntry>));
+                var returnValue = (IEnumerable<ChangeSetEntry>)ReadBinaryResponse(response, operationName, typeof(IEnumerable<ChangeSetEntry>));
                 return new SubmitCompletedResult(changeSet, returnValue ?? Enumerable.Empty<ChangeSetEntry>());
             }
             catch (FaultException<DomainServiceFault> fe)
@@ -209,7 +209,7 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
 
             if (query.IncludeTotalCount)
             {
-                queryOptions = queryOptions ?? new List<ServiceQueryPart>();
+                queryOptions ??= new List<ServiceQueryPart>();
                 queryOptions.Add(new ServiceQueryPart()
                 {
                     QueryOperator = "includeTotalCount",
@@ -217,14 +217,14 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
                 });
             }
 
-            var response = await ExecuteRequestAsync(query.QueryName, query.HasSideEffects, query.Parameters, queryOptions, cancellationToken)
-                .ConfigureAwait(false);
+            var response = await ExecuteBinaryRequestAsync(query.QueryName, query.HasSideEffects, query.Parameters, queryOptions);
 
             IEnumerable<ValidationResult> validationErrors = null;
             try
             {
                 var queryType = typeof(QueryResult<>).MakeGenericType(query.EntityType);
-                var queryResult = (QueryResult)ReadResponse(response, query.QueryName, queryType);
+                var queryResult = (QueryResult)ReadBinaryResponse(response, query.QueryName, queryType);
+
                 if (queryResult != null)
                 {
                     return new QueryCompletedResult(
@@ -249,11 +249,10 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
             return new QueryCompletedResult(
                     Enumerable.Empty<Entity>(),
                     Enumerable.Empty<Entity>(),
-                /* totalCount */ 0,
+                    /* totalCount */ 0,
                     validationErrors ?? Enumerable.Empty<ValidationResult>());
         }
         #endregion
-
 
         #region Private methods for making requests
         /// <summary>
@@ -279,8 +278,18 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
                 response = PostAsync(operationName, parameters, queryOptions, cancellationToken);
             }
 
-
             return response;
+        }
+
+        private Task<byte[]> ExecuteBinaryRequestAsync(
+            string operationName,
+            bool hasSideEffects,
+            IDictionary<string, object> parameters,
+            List<ServiceQueryPart> queryOptions)
+        {
+            return hasSideEffects
+                ? PostBinaryAsync(operationName, parameters, queryOptions)
+                : GetBinaryAsync(operationName, parameters, queryOptions);
         }
 
         /// <summary>
@@ -295,7 +304,22 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
             // Keep reference to dictionary so that we can dispose of it correctly after the request has been posted
             // otherwise there is a small risk that it will be finalized and that it might corrupt the stream
             return HttpClient.PostAsync(operationName, new BinaryXmlContent(this, operationName, parameters, queryOptions), cancellationToken);
+        }
 
+        private async Task<byte[]> PostBinaryAsync(string operationName, IDictionary<string, object> parameters, List<ServiceQueryPart> queryOptions)
+        {
+            var headers = new Dictionary<string, string>
+            {
+                { "content-type", "application/msbin1" }
+            };
+
+            var fullUri = HttpClient.BaseAddress.ToString() + operationName;
+
+            using var binaryContent = new BinaryXmlContent(this, operationName, parameters, queryOptions);
+            using var stream = new MemoryStream();
+            await binaryContent.CopyToAsync(stream, null);
+            
+            return await WebRequestsHelper.MakeBinaryRequest(fullUri, "POST", stream.ToArray(), headers, Application.Current.Host.Settings.DefaultSoapCredentialsMode);
         }
 
         internal virtual IDictionary<string, Type> GetTypes(string operationName)
@@ -303,14 +327,7 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
             return new Dictionary<string, Type>();
         }
 
-        /// <summary>
-        /// Initiates a GET request for the given operation and return the server respose (as a task).
-        /// </summary>
-        /// <param name="result">The result object which contains information about which operation was performed.</param>
-        /// <param name="parameters">The parameters to the server method, or <c>null</c> if no parameters.</param>
-        /// <param name="queryOptions">The query options if any.</param>
-        /// <returns></returns>
-        private Task<HttpResponseMessage> GetAsync(string operationName, IDictionary<string, object> parameters, IList<ServiceQueryPart> queryOptions, CancellationToken cancellationToken)
+        private string BuildRequestUri(string operationName, IDictionary<string, object> parameters, IList<ServiceQueryPart> queryOptions)
         {
             int i = 0;
             var uriBuilder = new StringBuilder();
@@ -345,9 +362,31 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
                 }
             }
 
-            // TODO: Switch to POST if uri becomes to long, we can do so by returning nul ...l
-            var uri = uriBuilder.ToString();
+            return uriBuilder.ToString();
+        }
+
+        /// <summary>
+        /// Initiates a GET request for the given operation and return the server respose (as a task).
+        /// </summary>
+        /// <param name="result">The result object which contains information about which operation was performed.</param>
+        /// <param name="parameters">The parameters to the server method, or <c>null</c> if no parameters.</param>
+        /// <param name="queryOptions">The query options if any.</param>
+        /// <returns></returns>
+        private Task<HttpResponseMessage> GetAsync(string operationName, IDictionary<string, object> parameters, IList<ServiceQueryPart> queryOptions, CancellationToken cancellationToken)
+        {
+            var uri = BuildRequestUri(operationName, parameters, queryOptions);
+
+            // TODO: Switch to POST if uri becomes to long, we can do so by returning null
             return HttpClient.GetAsync(uri, cancellationToken);
+        }
+
+        private Task<byte[]> GetBinaryAsync(string operationName, IDictionary<string, object> parameters, IList<ServiceQueryPart> queryOptions)
+        {
+            var uri = BuildRequestUri(operationName, parameters, queryOptions);
+            var fullUri = HttpClient.BaseAddress.ToString() + uri.ToString();
+
+            // TODO: Switch to POST if uri becomes to long, we can do so by returning null
+            return WebRequestsHelper.MakeBinaryRequest(fullUri, "GET", null);
         }
         #endregion
 
@@ -404,6 +443,34 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
 
                     return null;
                 }
+            }
+        }
+
+        private object ReadBinaryResponse(byte[] response, string operationName, Type returnType)
+        {
+            using var reader = System.Xml.XmlDictionaryReader.CreateBinaryReader(response, System.Xml.XmlDictionaryReaderQuotas.Max);
+            reader.Read();
+
+            // Domain Fault
+            if (reader.LocalName == "Fault")
+            {
+                throw ReadFaultException(reader, operationName);
+            }
+            else
+            {
+                // Validate that we are no on ****Response node
+                VerifyReaderIsAtNode(reader, operationName, "Response");
+                reader.ReadStartElement(); // Read to next which should be ****Result
+
+                if (returnType != typeof(void))
+                {
+                    // Validate that we are no on ****Result node
+                    VerifyReaderIsAtNode(reader, operationName, "Result");
+
+                    return DeserializeResult(returnType, reader);
+                }
+
+                return null;
             }
         }
 
