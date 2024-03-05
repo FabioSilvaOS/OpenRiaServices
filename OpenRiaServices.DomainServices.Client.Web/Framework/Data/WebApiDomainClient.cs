@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO;
@@ -98,14 +99,15 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
 
         private static readonly Dictionary<Type, Dictionary<Type, DataContractSerializer>> s_globalSerializerCache = new Dictionary<Type, Dictionary<Type, DataContractSerializer>>();
         private static readonly DataContractSerializer s_faultSerializer = new DataContractSerializer(typeof(DomainServiceFault));
-        Dictionary<Type, DataContractSerializer> _serializerCache;
+        private readonly Dictionary<Type, DataContractSerializer> _serializerCache;
+        private readonly HttpClient _httpClient;
 
         protected virtual string EndpointSuffix => "/binary/";
 
         public WebApiDomainClient(Type serviceInterface, Uri baseUri, HttpMessageHandler handler)
         {
             ServiceInterfaceType = serviceInterface;
-            HttpClient = new HttpClient(handler, disposeHandler: false)
+            _httpClient = new HttpClient(handler, disposeHandler: false)
             {
                 BaseAddress = new Uri(baseUri.AbsoluteUri + EndpointSuffix, UriKind.Absolute),
             };
@@ -122,7 +124,14 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
 
         internal Type ServiceInterfaceType { get; private set; }
 
-        HttpClient HttpClient { get; set; }
+        /// <summary>
+        /// Configure the underlying <see cref="HttpClient"/>.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public void ConfigureHttpClient(Action<HttpClient> configure)
+        {
+            configure?.Invoke(_httpClient);
+        }
 
         #region Begin*** Methods
         /// <summary>
@@ -294,7 +303,7 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
         {
             // Keep reference to dictionary so that we can dispose of it correctly after the request has been posted
             // otherwise there is a small risk that it will be finalized and that it might corrupt the stream
-            return HttpClient.PostAsync(operationName, new BinaryXmlContent(this, operationName, parameters, queryOptions), cancellationToken);
+            return _httpClient.PostAsync(operationName, new BinaryXmlContent(this, operationName, parameters, queryOptions), cancellationToken);
 
         }
 
@@ -347,7 +356,7 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
 
             // TODO: Switch to POST if uri becomes to long, we can do so by returning nul ...l
             var uri = uriBuilder.ToString();
-            return HttpClient.GetAsync(uri, cancellationToken);
+            return _httpClient.GetAsync(uri, cancellationToken);
         }
         #endregion
 
