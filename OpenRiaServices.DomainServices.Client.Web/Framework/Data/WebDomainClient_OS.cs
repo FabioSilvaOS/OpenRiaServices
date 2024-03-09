@@ -86,6 +86,32 @@ namespace OpenRiaServices.DomainServices.Client
             this._channelFactory = channelFactory;
         }
 
+        public WebDomainClient(Uri serviceUri, bool usesHttps, WcfDomainClientFactory domainClientFactory, Func<HttpClient> httpClientFactory)
+            : base(typeof(TContract), serviceUri, HttpClientHandlerFactory.Create(), httpClientFactory?.Invoke())
+        {
+            if (serviceUri == null) throw new ArgumentNullException(nameof(serviceUri));
+
+#if !SILVERLIGHT
+            if (!serviceUri.IsAbsoluteUri)
+            {
+                // Relative URIs currently only supported on Silverlight
+                throw new ArgumentException(OpenRiaServices.DomainServices.Client.Resource.DomainContext_InvalidServiceUri, "serviceUri");
+            }
+#endif
+
+            this._serviceUri = serviceUri;
+            this._usesHttps = usesHttps;
+            _webDomainClientFactory = domainClientFactory;
+
+#if SILVERLIGHT
+            // The domain client should not be initialized at design time
+            if (!System.ComponentModel.DesignerProperties.IsInDesignTool)
+            {
+                this.Initialize();
+            }
+#endif
+        }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="WebDomainClient&lt;TContract&gt;"/> class.
         /// </summary>

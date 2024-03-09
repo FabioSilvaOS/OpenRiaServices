@@ -104,13 +104,12 @@ namespace OpenRiaServices.DomainServices.Client.PortableWeb
 
         protected virtual string EndpointSuffix => "/binary/";
 
-        public WebApiDomainClient(Type serviceInterface, Uri baseUri, HttpMessageHandler handler)
+        public WebApiDomainClient(Type serviceInterface, Uri baseUri, HttpMessageHandler handler, HttpClient httpClient = null)
         {
             ServiceInterfaceType = serviceInterface;
-            _httpClient = new HttpClient(handler, disposeHandler: false)
-            {
-                BaseAddress = new Uri(baseUri.AbsoluteUri + EndpointSuffix, UriKind.Absolute),
-            };
+
+            _httpClient = httpClient ?? new HttpClient(handler, disposeHandler: false);
+            _httpClient.BaseAddress = new Uri(baseUri.AbsoluteUri + EndpointSuffix, UriKind.Absolute);
 
             lock (s_globalSerializerCache)
             {
