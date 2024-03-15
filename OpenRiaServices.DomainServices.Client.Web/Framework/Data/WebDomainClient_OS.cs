@@ -86,32 +86,6 @@ namespace OpenRiaServices.DomainServices.Client
             this._channelFactory = channelFactory;
         }
 
-        public WebDomainClient(Uri serviceUri, bool usesHttps, WcfDomainClientFactory domainClientFactory, Func<HttpClient> httpClientFactory)
-            : base(typeof(TContract), serviceUri, HttpClientHandlerFactory.Create(), httpClientFactory?.Invoke())
-        {
-            if (serviceUri == null) throw new ArgumentNullException(nameof(serviceUri));
-
-#if !SILVERLIGHT
-            if (!serviceUri.IsAbsoluteUri)
-            {
-                // Relative URIs currently only supported on Silverlight
-                throw new ArgumentException(OpenRiaServices.DomainServices.Client.Resource.DomainContext_InvalidServiceUri, "serviceUri");
-            }
-#endif
-
-            this._serviceUri = serviceUri;
-            this._usesHttps = usesHttps;
-            _webDomainClientFactory = domainClientFactory;
-
-#if SILVERLIGHT
-            // The domain client should not be initialized at design time
-            if (!System.ComponentModel.DesignerProperties.IsInDesignTool)
-            {
-                this.Initialize();
-            }
-#endif
-        }
-
         /// <summary>
         /// Initializes a new instance of the <see cref="WebDomainClient&lt;TContract&gt;"/> class.
         /// </summary>
@@ -127,7 +101,27 @@ namespace OpenRiaServices.DomainServices.Client
         /// is absolute and <paramref name="usesHttps"/> is true.
         /// </exception>
         public WebDomainClient(Uri serviceUri, bool usesHttps, WcfDomainClientFactory domainClientFactory)
-        : base(typeof(TContract), serviceUri, HttpClientHandlerFactory.Create())
+            : this(serviceUri, usesHttps, domainClientFactory, CreateHttpClient(HttpClientHandlerFactory.Create()))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="WebDomainClient&lt;TContract&gt;"/> class.
+        /// </summary>
+        /// <param name="serviceUri">The domain service Uri</param>
+        /// <param name="usesHttps">A value indicating whether the client should contact
+        /// the service using an HTTP or HTTPS scheme.
+        /// </param>
+        /// <param name="domainClientFactory">The domain client factory that creates channels to communicate with the server.</param>
+        /// <param name="httpClient">The <see cref="HttpClient"/> used to communicate with the server.</param>
+        /// <exception cref="ArgumentNullException"> is thrown if <paramref name="serviceUri"/>
+        /// is null.
+        /// </exception>
+        /// <exception cref="ArgumentException"> is thrown if <paramref name="serviceUri"/>
+        /// is absolute and <paramref name="usesHttps"/> is true.
+        /// </exception>
+        public WebDomainClient(Uri serviceUri, bool usesHttps, WcfDomainClientFactory domainClientFactory, HttpClient httpClient)
+            : base(typeof(TContract), serviceUri, httpClient)
         {
             if (serviceUri == null)
             {

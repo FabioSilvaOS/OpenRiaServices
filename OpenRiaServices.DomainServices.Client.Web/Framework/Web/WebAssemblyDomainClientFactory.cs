@@ -17,29 +17,28 @@ namespace OpenRiaServices.DomainServices.Client.Web
         private readonly MethodInfo _createInstanceMethod;
         private readonly Func<HttpClient> _httpClientFactory;
 
-        public WebAssemblyDomainClientFactory() : base()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="WebAssemblyDomainClientFactory"/> class.
+        /// </summary>
+        public WebAssemblyDomainClientFactory()
+            : this(() => new HttpClient(HttpClientHandlerFactory.Create(), disposeHandler: false))
         {
-            _createInstanceMethod = typeof(WebAssemblyDomainClientFactory).GetMethod(nameof(CreateInstance), BindingFlags.NonPublic | BindingFlags.Instance);
         }
 
-        public WebAssemblyDomainClientFactory(Uri serverBaseUri, Func<HttpClient> httpClientFactory) : this()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="WebAssemblyDomainClientFactory"/> class.
+        /// </summary>
+        /// <param name="httpClientFactory">
+        /// Method creating a new <see cref="HttpClient"/> each time, should never return null
+        /// </param>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="httpClientFactory"/> is null.
+        /// </exception>
+        public WebAssemblyDomainClientFactory(Func<HttpClient> httpClientFactory)
         {
-            base.ServerBaseUri = serverBaseUri;
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        }
-
-        private WebDomainClient<TContract> CreateInstance<TContract>(Uri serviceUri, bool requiresSecureEndpoint)
-             where TContract : class
-        {
-            return new WebDomainClient<TContract>(serviceUri, requiresSecureEndpoint, this, _httpClientFactory);
-        }
-
-        protected override DomainClient CreateDomainClientCore(Type serviceContract, Uri serviceUri, bool requiresSecureEndpoint)
-        {
-            var actualMethod = _createInstanceMethod.MakeGenericMethod(serviceContract);
-            var parameters = new object[] { serviceUri, requiresSecureEndpoint };
-
-            return (DomainClient)actualMethod.Invoke(this, parameters);
+            _createInstanceMethod = typeof(WebAssemblyDomainClientFactory)
+                .GetMethod(nameof(CreateInstance), BindingFlags.NonPublic | BindingFlags.Instance);
         }
 
         /// <summary>
@@ -62,6 +61,12 @@ namespace OpenRiaServices.DomainServices.Client.Web
         protected override Binding CreateBinding(Uri endpoint, bool requiresSecureEndpoint)
         {
             return new CustomBinding();
+        }
+
+        private WebDomainClient<TContract> CreateInstance<TContract>(Uri serviceUri, bool requiresSecureEndpoint)
+             where TContract : class
+        {
+            return new WebDomainClient<TContract>(serviceUri, requiresSecureEndpoint, this, _httpClientFactory());
         }
     }
 }
